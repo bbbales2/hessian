@@ -17,5 +17,5 @@ transformed parameters {
 model {
   y ~ normal(a * x + b, sigma);
   
-  target += sigma;
+  target += sigma_log;
 }

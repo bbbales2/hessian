@@ -27,8 +27,8 @@ hessian("data.dump", c(a, b, sigma))
 model = stan_model("models/linear_regression.stan")
 fit = optimizing(model, data = list(N = N, x = x, y = y), hessian = TRUE)
 
-(jac = jacobian("data.dump", fit$par[1:3])$jac)
-(hess = hessian("data.dump", fit$par[1:3])$hess)
+(jac = jacobian("data.dump", fit$par[1:3]))
+(hess = hessian("data.dump", fit$par[1:3]))
 
 samples = sampling(model, data = list(N = N, x = x, y = y), chains = 1)
 
