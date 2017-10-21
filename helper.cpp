@@ -23,14 +23,26 @@ stan::io::dump readData(std::string filename) {
   return dFile;
 }
 
+static linear_regression_model_namespace::linear_regression_model *model = NULL;
+
 // [[Rcpp::export]]
-Rcpp::List jacobian(std::string filename, std::vector<double> params) {
+void set_data(std::string filename) {
+  stan::io::dump dfile = readData(filename);
+  if(model != NULL) {
+    delete model;
+  }
+  model = new linear_regression_model_namespace::linear_regression_model(dfile, &Rcpp::Rcout);
+}
+
+// [[Rcpp::export]]
+Rcpp::List jacobian(std::vector<double> params) {
   using namespace Rcpp;
   using stan::math::var;
   using stan::math::fvar;
   
-  stan::io::dump dfile = readData(filename);
-  linear_regression_model_namespace::linear_regression_model model(dfile, &Rcpp::Rcout);
+  if(model == NULL) {
+    throw std::invalid_argument("Must call set_data before jacobian");
+  }
   
   NumericVector jac(params.size());
   
@@ -39,7 +51,7 @@ Rcpp::List jacobian(std::string filename, std::vector<double> params) {
   
   params_r.insert(params_r.begin(), params.begin(), params.end());
     
-  var lp = model.log_prob<true, true, var>(params_r, params_i, &Rcpp::Rcout);
+  var lp = model->log_prob<true, true, var>(params_r, params_i, &Rcpp::Rcout);
   
   lp.grad();
   
@@ -49,24 +61,28 @@ Rcpp::List jacobian(std::string filename, std::vector<double> params) {
   
   List out;
   
+  out["u"] = lp.val();
   out["jac"] = jac;
   
   return out;
 }
 
 // [[Rcpp::export]]
-Rcpp::List hessian(std::string filename, std::vector<double> params) {
+Rcpp::List hessian(std::vector<double> params) {
   using namespace Rcpp;
   using stan::math::var;
   using stan::math::fvar;
   
-  stan::io::dump dfile = readData(filename);
-  linear_regression_model_namespace::linear_regression_model model(dfile, &Rcpp::Rcout);
+  if(model == NULL) {
+    throw std::invalid_argument("Must call set_data before jacobian");
+  }
   
   NumericVector jac(params.size());
   NumericMatrix hess(params.size(), params.size());
   
   std::vector<int> params_i({});
+  
+  double lp_ = 0.0;
   
   for(size_t i = 0; i < params.size(); i++) {
     std::vector<fvar<var> > params_r;
@@ -74,7 +90,7 @@ Rcpp::List hessian(std::string filename, std::vector<double> params) {
       params_r.push_back(v);
     
     params_r[i].d_ = 1.0;
-    fvar<var> lp = model.log_prob<true, true, fvar<var> >(params_r, params_i, &Rcpp::Rcout);
+    fvar<var> lp = model->log_prob<true, true, fvar<var> >(params_r, params_i, &Rcpp::Rcout);
 
     jac(i) = lp.tangent().val();
     
@@ -82,10 +98,13 @@ Rcpp::List hessian(std::string filename, std::vector<double> params) {
     for(size_t j = 0; j < params_r.size(); j++) {
       hess(i, j) = params_r[j].val().adj();
     }
+    
+    lp_ = lp.val().val(); // Same every time
   }
   
   List out;
   
+  out["u"] = lp_;
   out["jac"] = jac;
   out["hess"] = hess;
   

@@ -21,8 +21,7 @@ system('/home/bbales2/cmdstan/bin/stanc --allow_undefined models/linear_regressi
 system('mv linear_regression_model.cpp linear_regression_model.hpp')
 
 sourceCpp("helper.cpp")
-set_data("data.dump")
-jacobian(c(a, b, sigma))
+set_data("data.dump");
 hessian(c(a, b, sigma))
 
 model = stan_model("models/linear_regression.stan")
@@ -35,4 +34,17 @@ samples = sampling(model, data = list(N = N, x = x, y = y), chains = 1)
 
 pairs(samples, pars = c("a", "b", "sigma_log"))
 
-eigen(hess)
+source("radford_hmc.R")
+
+eps = 1e-4
+L = 50
+N = 50
+qs = matrix(0, nrow = N, ncol = 3)
+
+q = fit$par[1:3]
+for(i in 1:N) {
+  q = radford_hmc(jacobian, eps, L, q, TRUE)
+  qs[i, ] = q
+}
+
+pairs(qs)
