@@ -63,6 +63,8 @@ Rcpp::List jacobian(std::vector<double> params) {
   
   out["u"] = lp.val();
   out["jac"] = jac;
+
+  stan::math::recover_memory();
   
   return out;
 }
@@ -107,6 +109,8 @@ Rcpp::List hessian(std::vector<double> params) {
   out["u"] = lp_;
   out["jac"] = jac;
   out["hess"] = hess;
+  
+  stan::math::recover_memory();
   
   return out;
 }
