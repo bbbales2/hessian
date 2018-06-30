@@ -114,3 +114,46 @@ Rcpp::List hessian(std::vector<double> params) {
   
   return out;
 }
+
+// [[Rcpp::export]]
+Rcpp::List hessian_vector(std::vector<double> params, std::vector<double> vector) {
+  using namespace Rcpp;
+  using stan::math::var;
+  using stan::math::fvar;
+  
+  if(model == NULL) {
+    throw std::invalid_argument("Must call set_data before jacobian");
+  }
+  
+  double jacv;
+  NumericVector hessv(params.size());
+  
+  std::vector<int> params_i({});
+  
+  double lp_ = 0.0;
+
+  std::vector<fvar<var> > params_r;
+  for(int i = 0; i < params.size(); ++i) {
+    params_r.emplace_back(params[i], vector[i]);
+  }
+
+  fvar<var> lp = model->log_prob<true, true, fvar<var> >(params_r, params_i, &Rcpp::Rcout);
+  
+  lp_ = lp.val().val(); // Same every time
+  jacv = lp.tangent().val();
+
+  lp.d_.grad();
+  for(size_t j = 0; j < params_r.size(); j++) {
+    hessv(j) = params_r[j].val().adj();
+  }
+
+  List out;
+  
+  out["u"] = lp_;
+  out["jacv"] = jacv;
+  out["hessv"] = hessv;
+  
+  stan::math::recover_memory();
+  
+  return out;
+}
