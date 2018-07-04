@@ -3,6 +3,8 @@ library(ggplot2)
 library(rstan)
 library(Rcpp)
 
+source("hessian_helper.R")
+
 a = 1.5
 b = 0.5
 sigma = 0.25
@@ -15,13 +17,8 @@ list(x = x, y = y) %>% as.tibble %>%
   ggplot(aes(x, y)) +
   geom_point()
 
-stan_rdump(list("N", "x", "y"), file = "data.dump")
+load_model("models/linear_regression.stan", list(N = N, x = x, y = y))
 
-system('/home/bbales2/cmdstan/bin/stanc --allow_undefined models/linear_regression.stan')
-system('mv linear_regression_model.cpp linear_regression_model.hpp')
-
-sourceCpp("helper.cpp")
-set_data("data.dump")
 jacobian(c(a, b, sigma))
 h = hessian(c(a, b, sigma))
 vec = rnorm(3)
