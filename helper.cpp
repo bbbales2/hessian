@@ -8,6 +8,7 @@
 #include <stan/io/dump.hpp>
 #include <iostream>
 #include <fstream>
+#include <unsupported/Eigen/IterativeSolvers>
 
 stan::io::dump readData(std::string filename) {
   std::ifstream dumpFile(filename.c_str());
@@ -156,4 +157,89 @@ Rcpp::List hessian_vector(std::vector<double> params, std::vector<double> vector
   stan::math::recover_memory();
   
   return out;
+}
+
+// The code for this was taken from https://eigen.tuxfamily.org/dox/group__MatrixfreeSolverExample.html
+class HessianMatrixReplacement;
+
+namespace Eigen {
+namespace internal {
+// HessianMatrixReplacement looks-like a SparseMatrix, so let's inherits its traits:
+template<>
+struct traits<HessianMatrixReplacement> :  public Eigen::internal::traits<Eigen::SparseMatrix<double> >{};
+}
+}
+
+// Example of a matrix-free wrapper from a user type to Eigen's compatible type
+// For the sake of simplicity, this example simply wrap a Eigen::SparseMatrix.
+class HessianMatrixReplacement : public Eigen::EigenBase<HessianMatrixReplacement> {
+public:
+  // Required typedefs, constants, and method:
+  typedef double Scalar;
+  typedef double RealScalar;
+  typedef int StorageIndex;
+  enum {
+    ColsAtCompileTime = Eigen::Dynamic,
+    MaxColsAtCompileTime = Eigen::Dynamic,
+    IsRowMajor = false
+  };
+  Index rows() const { return Index(params_.size()); }
+  Index cols() const { return Index(params_.size()); }
+  
+  template<typename Rhs>
+  Eigen::Product<HessianMatrixReplacement,Rhs,Eigen::AliasFreeProduct> operator*(const Eigen::MatrixBase<Rhs>& x) const {
+    return Eigen::Product<HessianMatrixReplacement,Rhs,Eigen::AliasFreeProduct>(*this, x.derived());
+  }
+  
+  // Custom API:
+  HessianMatrixReplacement(std::vector<double> params) : params_(params) {
+  }
+  
+  const std::vector<double> &get_params() const { return params_; }
+private:
+  std::vector<double> params_;
+};
+
+// Implementation of HessianMatrixReplacement * Eigen::DenseVector though a specialization of internal::generic_product_impl:
+namespace Eigen {
+namespace internal {
+template<typename Rhs>
+struct generic_product_impl<HessianMatrixReplacement, Rhs, SparseShape, DenseShape, GemvProduct> // GEMV stands for matrix-vector
+  : generic_product_impl_base<HessianMatrixReplacement,Rhs,generic_product_impl<HessianMatrixReplacement,Rhs> >
+{
+  typedef typename Product<HessianMatrixReplacement,Rhs>::Scalar Scalar;
+  template<typename Dest>
+  static void scaleAndAddTo(Dest& dst, const HessianMatrixReplacement& lhs, const Rhs& rhs, const Scalar& alpha)
+  {
+    // This method should implement "dst += alpha * lhs * rhs" inplace
+    std::vector<double> rhs_vector(rhs.size());
+    for(int i = 0; i < rhs.size(); i++)
+      rhs_vector[i] = rhs(i);
+    Rcpp::NumericVector out = hessian_vector(lhs.get_params(), rhs_vector)["hessv"];
+    for(int i = 0; i < dst.size(); i++)
+      dst(i) += alpha * out(i);
+  }
+};
+}
+}
+
+// [[Rcpp::export]]
+Rcpp::NumericVector hessian_solve(std::vector<double> params, std::vector<double> rhs) {
+  HessianMatrixReplacement A(params);
+  Eigen::VectorXd rhs_eigen(rhs.size());
+  Rcpp::NumericVector x(rhs.size());
+  
+  for(int i = 0; i < rhs.size(); i++)
+    rhs_eigen(i) = rhs[i];
+
+  Eigen::MINRES<HessianMatrixReplacement, Eigen::Lower | Eigen::Upper> solver;
+  
+  solver.compute(A);
+  
+  Eigen::VectorXd x_eigen = solver.solve(rhs_eigen);
+  
+  for (int i = 0; i < x_eigen.size(); ++i)
+    x(i) = x_eigen(i);
+  
+  return x;
 }
