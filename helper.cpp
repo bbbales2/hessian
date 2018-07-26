@@ -192,12 +192,16 @@ public:
   }
   
   // Custom API:
-  HessianMatrixReplacement(std::vector<double> params) : params_(params) {
+  HessianMatrixReplacement(std::vector<double> params, std::vector<double> M, double h) : params_(params), M_(M), h_(h) {
   }
   
   const std::vector<double> &get_params() const { return params_; }
+  const std::vector<double> &get_M() const { return M_; }
+  double get_h() const { return h_; }
 private:
   std::vector<double> params_;
+  std::vector<double> M_;
+  double h_;
 };
 
 // Implementation of HessianMatrixReplacement * Eigen::DenseVector though a specialization of internal::generic_product_impl:
@@ -212,10 +216,15 @@ struct generic_product_impl<HessianMatrixReplacement, Rhs, SparseShape, DenseSha
   static void scaleAndAddTo(Dest& dst, const HessianMatrixReplacement& lhs, const Rhs& rhs, const Scalar& alpha)
   {
     // This method should implement "dst += alpha * lhs * rhs" inplace
+    auto M = lhs.get_M();
+    auto h = lhs.get_h();
     std::vector<double> rhs_vector(rhs.size());
     for(int i = 0; i < rhs.size(); i++)
       rhs_vector[i] = rhs(i);
     Rcpp::NumericVector out = hessian_vector(lhs.get_params(), rhs_vector)["hessv"];
+    for(int i = 0; i < out.size(); i++) {
+      out(i) = rhs(i) + h * h * out(i) / (4.0 * M[i]);
+    }
     for(int i = 0; i < dst.size(); i++)
       dst(i) += alpha * out(i);
   }
@@ -224,8 +233,8 @@ struct generic_product_impl<HessianMatrixReplacement, Rhs, SparseShape, DenseSha
 }
 
 // [[Rcpp::export]]
-Rcpp::NumericVector hessian_solve(std::vector<double> params, std::vector<double> rhs, std::vector<double> guess, double tolerance) {
-  HessianMatrixReplacement A(params);
+Rcpp::NumericVector hessian_solve(std::vector<double> params, std::vector<double> rhs, std::vector<double> M, double h, std::vector<double> guess, double tolerance) {
+  HessianMatrixReplacement A(params, M, h);
   Eigen::VectorXd rhs_eigen(rhs.size()),
   guess_eigen(guess.size());
   Rcpp::NumericVector x(rhs.size());

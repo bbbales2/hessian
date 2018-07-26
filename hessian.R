@@ -23,8 +23,11 @@ jacobian(c(a, b, sigma))
 h = hessian(c(a, b, sigma))
 vec = rnorm(3)
 hv = hessian_vector(c(a, b, sigma), vec)
-solve(h$hess, vec)
-hessian_solve(c(a, b, sigma), vec, rep(1, 3), 1e-1)
+dt = 1e-2
+M = abs(rnorm(3))
+solve(diag(rep(1, 3)) + (dt * dt / 4.0) * diag(1 / M) %*% h$hess, vec)
+hessian_solve(c(a, b, sigma), vec, M, dt, rep(0, 3), 1e-10)
+eigen(diag(rep(1, 3)) + (dt * dt / 4.0) * diag(1 / M) %*% h$hess)
 
 model = stan_model("models/linear_regression.stan")
 fit = optimizing(model, data = list(N = N, x = x, y = y), hessian = TRUE)
