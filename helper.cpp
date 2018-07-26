@@ -8,6 +8,7 @@
 #include <stan/io/dump.hpp>
 #include <iostream>
 #include <fstream>
+#include <Eigen/IterativeLinearSolvers>
 #include <unsupported/Eigen/IterativeSolvers>
 
 stan::io::dump readData(std::string filename) {
@@ -245,7 +246,7 @@ Rcpp::NumericVector hessian_solve(std::vector<double> params, std::vector<double
   for(int i = 0; i < rhs.size(); i++)
     guess_eigen(i) = guess[i];
   
-  Eigen::MINRES<HessianMatrixReplacement, Eigen::Lower | Eigen::Upper> solver;
+  Eigen::GMRES<HessianMatrixReplacement, Eigen::IdentityPreconditioner> solver;
   
   solver.setTolerance(tolerance);
   solver.compute(A);
