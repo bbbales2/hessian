@@ -234,11 +234,12 @@ struct generic_product_impl<HessianMatrixReplacement, Rhs, SparseShape, DenseSha
 }
 
 // [[Rcpp::export]]
-Rcpp::NumericVector hessian_solve(std::vector<double> params, std::vector<double> rhs, std::vector<double> M, double h, std::vector<double> guess, double tolerance) {
+Rcpp::List hessian_solve(std::vector<double> params, std::vector<double> rhs, std::vector<double> M, double h, std::vector<double> guess, double tolerance) {
   HessianMatrixReplacement A(params, M, h);
   Eigen::VectorXd rhs_eigen(rhs.size()),
   guess_eigen(guess.size());
   Rcpp::NumericVector x(rhs.size());
+  Rcpp::List out;
   
   for(int i = 0; i < rhs.size(); i++)
     rhs_eigen(i) = rhs[i];
@@ -256,5 +257,9 @@ Rcpp::NumericVector hessian_solve(std::vector<double> params, std::vector<double
   for (int i = 0; i < x_eigen.size(); ++i)
     x(i) = x_eigen(i);
   
-  return x;
+  out["x"] = x;
+  out["iterations"] = solver.iterations();
+  out["error"] = solver.error();
+  
+  return out;
 }
