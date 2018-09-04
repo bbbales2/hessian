@@ -36,6 +36,42 @@ void set_data(std::string filename) {
   model = new linear_regression_model_namespace::linear_regression_model(dfile, &Rcpp::Rcout);
 }
 
+
+// [[Rcpp::export]]
+Rcpp::List check_constants_are_constant(std::vector<double> params) {
+  using namespace Rcpp;
+  using stan::math::var;
+  
+  if(model == NULL) {
+    throw std::invalid_argument("Must call set_data before jacobian");
+  }
+  
+  NumericVector jac(params.size());
+  
+  std::vector<var> params_rv;
+  std::vector<int> params_i({});
+  
+  params_rv.insert(params_rv.begin(), params.begin(), params.end());
+  
+  List out;
+  
+  double var_true = stan::math::value_of(model->log_prob<true, true, var>(params_rv, params_i, &Rcpp::Rcout));
+  double var_false = stan::math::value_of(model->log_prob<false, true, var>(params_rv, params_i, &Rcpp::Rcout));
+  double double_true = model->log_prob<true, true, double>(params, params_i, &Rcpp::Rcout);
+  double double_false = model->log_prob<false, true, double>(params, params_i, &Rcpp::Rcout);
+  
+  out["var_true"] = var_true;
+  out["var_false"] = var_false;
+  out["double_true"] = double_true;
+  out["double_false"] = double_false;
+  out["var"] = var_true - var_false;
+  out["double"] = double_true - double_false;
+  
+  stan::math::recover_memory();
+
+  return out;
+}
+
 // [[Rcpp::export]]
 Rcpp::List jacobian(std::vector<double> params) {
   using namespace Rcpp;
